@@ -18,8 +18,7 @@ void idlefunc( void )
 // Keyboard function
 void keyboardfunc( unsigned char key, int x, int y )
 {
-	switch ( key )
-	{
+	switch ( key ){
 		case 27: // ESC
 			exit( 0 ); break;
 		case 's':
@@ -32,8 +31,7 @@ void keyboardfunc( unsigned char key, int x, int y )
 }
 
 // Display function
-void displayfunc( void )
-{
+void displayfunc( void ){
     glClear( GL_COLOR_BUFFER_BIT );
 
     gScene.display();
@@ -41,8 +39,7 @@ void displayfunc( void )
     glutSwapBuffers();
 }
 
-void init( void )
-{
+void init( void ){
   // Setup the projection matrix.
   glMatrixMode( GL_PROJECTION );
   gluPerspective( 45.0, 1.0, 1.0, 10.0);
@@ -55,12 +52,11 @@ void init( void )
 }
 
 // Main program
-int main( int argc, char* argv[] )
-{
+int main( int argc, char* argv[] ){
     glutInit( &argc, argv );
     glutInitWindowSize( 800, 800 );
     glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGB );
-    glutCreateWindow( "PIC/FLIP fluid simulator" );
+    glutCreateWindow("PIC/FLIP fluid simulator");
 
     glutIdleFunc( idlefunc );
 	glutKeyboardFunc( keyboardfunc );

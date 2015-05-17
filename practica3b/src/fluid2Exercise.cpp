@@ -2,23 +2,15 @@
 #include "scene.h"
 #include "pcg_solver.h"
 
-namespace
-{
-    inline int clamp( int x, int a, int b )
-    {
-        return x < a ? a : ( x > b ? b : x );
-    }
+namespace{
+    inline int clamp(int x, int a, int b){ return x<a ? a:( x>b ? b:x); }
     
-	struct BaseSampler
-	{
-		BaseSampler( const Grid2& grid, const Array2< float >& data )
-			: grid_( grid ), data_( data )
-		{}
+	struct BaseSampler{
+		BaseSampler( const Grid2& grid, const Array2<float>& data ): grid_( grid ), data_( data ){}
 
         virtual Vec2 getIndex( const Vec2& pos ) = 0;
 
-		float getValue( const Vec2& pos )
-		{
+		float getValue(const Vec2& pos){
             const Vec2 ispos( getIndex( pos ) );
             const Vec2 isposmin( floorf( ispos.x ), floorf( ispos.y ) );
             const Vec2 isposmax( ceilf( ispos.x ), ceilf( ispos.y ) );
@@ -36,8 +28,7 @@ namespace
 			return value;
 		}
         
-        float bilerp( const float aa, const float ba, const float ab, const float bb, const float tx, const float ty )
-        {
+        float bilerp( const float aa, const float ba, const float ab, const float bb, const float tx, const float ty ){
             const float y1 = aa * ( 1.0f - tx ) + ba * tx;
             const float y2 = ab * ( 1.0f - tx ) + bb * tx;
             return y1 * ( 1.0f - ty ) + y2 * ty;
@@ -48,28 +39,16 @@ namespace
 		const Array2< float >& data_;
 	};
     
-	struct CellSampler : BaseSampler
-	{
-		CellSampler( const Grid2& grid, const Array2< float >& data )
-			: BaseSampler( grid, data )
-		{}
+	struct CellSampler:BaseSampler{
+		CellSampler(const Grid2& grid, const Array2<float>& data ): BaseSampler( grid, data ){}
 
-        Vec2 getIndex( const Vec2& pos )
-        {
-            return grid_.getCellIndex( pos );
-        }
+        Vec2 getIndex( const Vec2& pos ){ return grid_.getCellIndex( pos ); }
     };
 
-	struct FaceSampler : BaseSampler
-	{
-		FaceSampler( const Grid2& grid, const Array2< float >& data, const unsigned int axis )
-			: BaseSampler( grid, data ), axis_( axis )
-		{}
+	struct FaceSampler:BaseSampler{
+		FaceSampler(const Grid2& grid, const Array2<float>& data, const unsigned int axis): BaseSampler(grid, data), axis_( axis ){}
         
-        Vec2 getIndex( const Vec2& pos )
-        {
-            return grid_.getFaceIndex( pos, axis_ );
-        }
+        Vec2 getIndex( const Vec2& pos ){ return grid_.getFaceIndex( pos, axis_ ); }
 
         const unsigned int axis_;
 	};
@@ -77,21 +56,47 @@ namespace
 	//////////////////////////////////////////////
 	// Add any custom classes or functions here //
 	//////////////////////////////////////////////
-    
+	inline float random(const float max, const float min){  
+		float randomize = (float)rand() / (float) RAND_MAX;
+		float interval = fabs(max - min);
+		return (randomize*interval) + fmin(min,max);
+	}
 }
 
 // init particles
-void Fluid2::initParticles( void )
-{
+void Fluid2::initParticles( void ){
     // particle sampling on the entire domain
+	Index2 size= grid.getSize();
 
+	// Middle size of cells in X and Y
+	const float dx = (grid.getDomain().maxPosition.x - grid.getDomain().minPosition.x / (size.x * 2));
+	const float dy = (grid.getDomain().maxPosition.y - grid.getDomain().minPosition.y / (size.y * 2));
+	
+	// Recorremos el grig
+	for (unsigned int i = 0; i < size.x; ++i){
+		for (unsigned int j = 0; j < size.x; ++j){
+			// Look, what is particle? 
+			const Index2 cell(i, j);
+			const Vec2 posCell(grid.getCellPos(cell));
+			
+			// Calculamos las posiciones de las particulas mediante el metodo random
+			const Vec2 position1(random(posCell.x-dx, posCell.x), random(posCell.y-dy, posCell.y));
+			const Vec2 position2(random(posCell.x+dx, posCell.x), random(posCell.y-dy, posCell.y));
+			const Vec2 position3(random(posCell.x-dx, posCell.x), random(posCell.y+dy, posCell.y));
+			const Vec2 position4(random(posCell.x+dx, posCell.x), random(posCell.y+dy, posCell.y));
+			
+			// Add particles to fluid
+			particles.addParticle(position1);
+			particles.addParticle(position2);
+			particles.addParticle(position3);
+			particles.addParticle(position4);
+		}
+	}
 }
 
 // advection
-void Fluid2::fluidAdvection( const float dt )
-{
-    if( flipEnabled )
-    {
+void Fluid2::fluidAdvection( const float dt ){
+    if(flipEnabled){
         // move particles with RK2 with grid velocities
 
         // ensure particle remains inside the domain
@@ -104,26 +109,24 @@ void Fluid2::fluidAdvection( const float dt )
 
         // save current state velocities
 
-    }
-    else
-    {
+    }else{
         // ink
 	    Array2<float> inkcopy( ink );
 	    CellSampler inksampler( grid, inkcopy );
 
         const Index2& size = ink.getSize();
 	    for( unsigned int i = 0; i < size.x; ++i )
-	    for( unsigned int j = 0; j < size.y; ++j )
-	    {
-		    const Index2 id( i, j );
+			for( unsigned int j = 0; j < size.y; ++j )
+			{
+				const Index2 id( i, j );
 
-		    const Vec2 pos( grid.getCellPos( id ) );
-		    const Vec2 vel( ( velocityX[ id ] + velocityX[ Index2( i+1, j ) ] ) * 0.5f,
-                            ( velocityY[ id ] + velocityY[ Index2( i, j+1 ) ] ) * 0.5f );
-		    const Vec2 endpos( pos - dt * vel );
+				const Vec2 pos( grid.getCellPos( id ) );
+				const Vec2 vel( ( velocityX[ id ] + velocityX[ Index2( i+1, j ) ] ) * 0.5f,
+								( velocityY[ id ] + velocityY[ Index2( i, j+1 ) ] ) * 0.5f );
+				const Vec2 endpos( pos - dt * vel );
 
-		    ink[ id ] = inksampler.getValue( endpos );;
-	    }
+				ink[ id ] = inksampler.getValue( endpos );;
+			}
 
         // velocity
 	    Array2< float > ucopy( velocityX );
@@ -134,52 +137,46 @@ void Fluid2::fluidAdvection( const float dt )
         const Index2& sizev = velocityY.getSize();
 
 	    for( unsigned int i = 0; i < sizeu.x; ++i )
-	    for( unsigned int j = 0; j < sizeu.y; ++j )
-	    {
-		    const Index2 id( i, j );
-            const Index2 idv1( clamp( i-1, 0, sizev.x-1 ), clamp( j  , 0, sizev.y-1 ) );
-            const Index2 idv2( clamp( i  , 0, sizev.x-1 ), clamp( j  , 0, sizev.y-1 ) );
-            const Index2 idv3( clamp( i-1, 0, sizev.x-1 ), clamp( j+1, 0, sizev.y-1 ) );
-            const Index2 idv4( clamp( i  , 0, sizev.x-1 ), clamp( j+1, 0, sizev.y-1 ) );
+			for( unsigned int j = 0; j < sizeu.y; ++j ){
+				const Index2 id( i, j );
+				const Index2 idv1( clamp( i-1, 0, sizev.x-1 ), clamp( j  , 0, sizev.y-1 ) );
+				const Index2 idv2( clamp( i  , 0, sizev.x-1 ), clamp( j  , 0, sizev.y-1 ) );
+				const Index2 idv3( clamp( i-1, 0, sizev.x-1 ), clamp( j+1, 0, sizev.y-1 ) );
+				const Index2 idv4( clamp( i  , 0, sizev.x-1 ), clamp( j+1, 0, sizev.y-1 ) );
 
-		    const Vec2 pos( grid.getFaceXPos( id ) );
-		    const Vec2 vel( ucopy[ id ], ( vcopy[ idv1 ] + vcopy[ idv2 ] + vcopy[ idv3 ] + vcopy[ idv4 ] ) * 0.25f );
-		    const Vec2 endpos( pos - dt * vel );
+				const Vec2 pos( grid.getFaceXPos( id ) );
+				const Vec2 vel( ucopy[ id ], ( vcopy[ idv1 ] + vcopy[ idv2 ] + vcopy[ idv3 ] + vcopy[ idv4 ] ) * 0.25f );
+				const Vec2 endpos( pos - dt * vel );
 
-		    velocityX[ id ] = usampler.getValue( endpos );
-	    }
+				velocityX[ id ] = usampler.getValue( endpos );
+			}
 
 	    for( unsigned int i = 0; i < sizev.x; ++i )
-	    for( unsigned int j = 0; j < sizev.y; ++j )
-	    {
-		    const Index2 id( i, j );
-            const Index2 idu1( clamp( i  , 0, sizeu.x-1 ), clamp( j-1, 0, sizeu.y-1 ) );
-            const Index2 idu2( clamp( i  , 0, sizeu.x-1 ), clamp( j  , 0, sizeu.y-1 ) );
-            const Index2 idu3( clamp( i+1, 0, sizeu.x-1 ), clamp( j-1, 0, sizeu.y-1 ) );
-            const Index2 idu4( clamp( i+1, 0, sizeu.x-1 ), clamp( j  , 0, sizeu.y-1 ) );
+			for( unsigned int j = 0; j < sizev.y; ++j ){
+				const Index2 id( i, j );
+				const Index2 idu1( clamp( i  , 0, sizeu.x-1 ), clamp( j-1, 0, sizeu.y-1 ) );
+				const Index2 idu2( clamp( i  , 0, sizeu.x-1 ), clamp( j  , 0, sizeu.y-1 ) );
+				const Index2 idu3( clamp( i+1, 0, sizeu.x-1 ), clamp( j-1, 0, sizeu.y-1 ) );
+				const Index2 idu4( clamp( i+1, 0, sizeu.x-1 ), clamp( j  , 0, sizeu.y-1 ) );
 
-		    const Vec2 pos( grid.getFaceYPos( id ) );
-		    const Vec2 vel( ( ucopy[ idu1 ] + ucopy[ idu2 ] + ucopy[ idu3 ] + ucopy[ idu4 ] ) * 0.25f, vcopy[ id ] );
-		    const Vec2 endpos( pos - dt * vel );
+				const Vec2 pos( grid.getFaceYPos( id ) );
+				const Vec2 vel( ( ucopy[ idu1 ] + ucopy[ idu2 ] + ucopy[ idu3 ] + ucopy[ idu4 ] ) * 0.25f, vcopy[ id ] );
+				const Vec2 endpos( pos - dt * vel );
 
-		    velocityY[ id ] = vsampler.getValue( endpos );
-	    }
+				velocityY[ id ] = vsampler.getValue( endpos );
+			}
     }
 }
 
 // emission
-void Fluid2::fluidEmission( void )
-{
+void Fluid2::fluidEmission( void ){
     const Vec2 vel( 0, 6 );
     const Bbox2 source( -0.18f, -1.9f, 0.18f, -1.7f );
 
-    if( flipEnabled )
-	{
+    if(flipEnabled ){
         // modify particles properties if inside the domain
 
-    }
-    else
-    {
+    }else{
         Vec2 ismin = grid.getCellIndex( source.minPosition );
         Vec2 ismax = grid.getCellIndex( source.maxPosition );
         Index2 cornermin( (int) floor( ismin.x ), (int) floor( ismin.y ) );
@@ -201,17 +198,15 @@ void Fluid2::fluidEmission( void )
 }
 
 // volume forces
-void Fluid2::fluidVolumeForces( const float dt )
-{
+void Fluid2::fluidVolumeForces( const float dt ){
     const float dtGravity = dt * Scene::kGravity;
     const Index2& sizev = velocityY.getSize();
-	for( unsigned int i = 0, n = sizev.x * sizev.y; i < n; ++i )
+	for(unsigned int i = 0, n = sizev.x * sizev.y; i < n; ++i )
 		velocityY[ i ] += dtGravity;
 }
 
 // viscosity
-void Fluid2::fluidViscosity( const float dt )
-{
+void Fluid2::fluidViscosity( const float dt ){
     Array2< float > ucopy( velocityX );
     Array2< float > vcopy( velocityY );
     const Index2& sizeu = velocityX.getSize();
@@ -222,8 +217,7 @@ void Fluid2::fluidViscosity( const float dt )
     const float dtMuOverRho = dt * Scene::kViscosity / Scene::kDensity;
 
     for( unsigned int i = 0; i < sizeu.x; ++i )
-	for( unsigned int j = 0; j < sizeu.y; ++j )
-    {
+	for( unsigned int j = 0; j < sizeu.y; ++j ){
         const Index2 id( i, j );
         const Index2 id1( clamp( i-1, 0, sizeu.x-1 ), j );
         const Index2 id2( clamp( i+1, 0, sizeu.x-1 ), j );
@@ -235,22 +229,20 @@ void Fluid2::fluidViscosity( const float dt )
     }
         
 	for( unsigned int i = 0; i < sizev.x; ++i )
-	for( unsigned int j = 0; j < sizev.y; ++j )
-    {
-        const Index2 id( i, j );
-        const Index2 id1( clamp( i-1, 0, sizev.x-1 ), j );
-        const Index2 id2( clamp( i+1, 0, sizev.x-1 ), j );
-        const Index2 id3( i , clamp( j-1, 0, sizev.y-1 ) );
-        const Index2 id4( i , clamp( j+1, 0, sizev.y-1 ) );
-        velocityY[ id ] += dtMuOverRho * (
-            ( vcopy[ id1 ] - 2.0f * vcopy[ id ] + vcopy[ id2 ] ) * invDxSq.x +
-            ( vcopy[ id3 ] - 2.0f * vcopy[ id ] + vcopy[ id4 ] ) * invDxSq.y );
-    }
+		for( unsigned int j = 0; j < sizev.y; ++j ){
+			const Index2 id( i, j );
+			const Index2 id1( clamp( i-1, 0, sizev.x-1 ), j );
+			const Index2 id2( clamp( i+1, 0, sizev.x-1 ), j );
+			const Index2 id3( i , clamp( j-1, 0, sizev.y-1 ) );
+			const Index2 id4( i , clamp( j+1, 0, sizev.y-1 ) );
+			velocityY[ id ] += dtMuOverRho * (
+				( vcopy[ id1 ] - 2.0f * vcopy[ id ] + vcopy[ id2 ] ) * invDxSq.x +
+				( vcopy[ id3 ] - 2.0f * vcopy[ id ] + vcopy[ id4 ] ) * invDxSq.y );
+		}
 }
 
 // pressure
-void Fluid2::fluidPressureProjection( const float dt )
-{
+void Fluid2::fluidPressureProjection( const float dt ){
     const Vec2 dx = grid.getCellDx();
     const Vec2 invDx( 1.0f / dx.x, 1.0f / dx.y );
     const Vec2 invDxSq( 1.0f / ( dx.x * dx.x ), 1.0f / ( dx.y * dx.y ) );
@@ -262,13 +254,11 @@ void Fluid2::fluidPressureProjection( const float dt )
     const Index2& sizev = velocityY.getSize();
 
     // wall boundary conditions
-    for( unsigned int j = 0; j < sizeu.y; ++j )
-    {
+    for( unsigned int j = 0; j < sizeu.y; ++j ){
         velocityX[ Index2( 0, j ) ] = 0.0f;
         velocityX[ Index2( sizeu.x-1, j ) ] = 0.0f;
     }
-    for( unsigned int i = 0; i < sizev.x; ++i )
-    {
+    for( unsigned int i = 0; i < sizev.x; ++i ){
         velocityY[ Index2( i, 0 ) ] = 0.0f;
         velocityY[ Index2( i, sizev.y-1 ) ] = 0.0f;
     }
@@ -277,29 +267,27 @@ void Fluid2::fluidPressureProjection( const float dt )
     const float rhoOverDt = Scene::kDensity / dt;
     std::vector< double > rhs( size.x * size.y );
 	for( unsigned int i = 0; i < size.x; ++i )
-	for( unsigned int j = 0; j < size.y; ++j )
-    {
-        const Index2 id( i, j );
-        rhs[ pressure.getLinearIndex( i, j ) ] = - rhoOverDt * 
-            ( ( velocityX[ Index2( i+1, j ) ] - velocityX[ id ] ) * invDx.x + 
-                ( velocityY[ Index2( i, j+1 ) ] - velocityY[ id ] ) * invDx.y );
-    }
+		for( unsigned int j = 0; j < size.y; ++j ){
+			const Index2 id( i, j );
+			rhs[ pressure.getLinearIndex( i, j ) ] = - rhoOverDt * 
+				( ( velocityX[ Index2( i+1, j ) ] - velocityX[ id ] ) * invDx.x + 
+					( velocityY[ Index2( i, j+1 ) ] - velocityY[ id ] ) * invDx.y );
+		}
 
     // A
     SparseMatrix< double > A( size.x * size.y, 5 );
     for( unsigned int i = 0; i < size.x; ++i )
-	for( unsigned int j = 0; j < size.y; ++j )
-    {
+	for( unsigned int j = 0; j < size.y; ++j ){
         const unsigned int id = pressure.getLinearIndex( i, j );
-        if( i > 0 ) {
+        if( i > 0 ){
             const unsigned int id1 = pressure.getLinearIndex( i-1, j );
             A.add_to_element( id, id, 1. * invDxSq.x );
             A.add_to_element( id, id1, -1. * invDxSq.x ); }
-        if( i < size.x-1 ) {
+        if( i < size.x-1 ){
             const unsigned int id1 = pressure.getLinearIndex( i+1, j );
             A.add_to_element( id, id, 1. * invDxSq.x );
             A.add_to_element( id, id1, -1. * invDxSq.x ); }
-        if( j > 0 ) {
+        if( j > 0 ){
             const unsigned int id1 = pressure.getLinearIndex( i, j-1 );
             A.add_to_element( id, id, 1. * invDxSq.y );
             A.add_to_element( id, id1, -1. * invDxSq.y ); }
@@ -326,22 +314,19 @@ void Fluid2::fluidPressureProjection( const float dt )
     // apply pressure gradient
     const float dtOverRho = dt / Scene::kDensity;
 	for( unsigned int i = 1; i < sizeu.x - 1; ++i )
-	for( unsigned int j = 0; j < sizeu.y; ++j )
-    {
-        const Index2 id( i, j );
-        const float gradp = ( pressure[ id ] - pressure[ Index2( i-1, j ) ] ) * invDx.x;
-        velocityX[ id ] -= dtOverRho * gradp;
-    }
+		for( unsigned int j = 0; j < sizeu.y; ++j ){
+			const Index2 id( i, j );
+			const float gradp = ( pressure[ id ] - pressure[ Index2( i-1, j ) ] ) * invDx.x;
+			velocityX[ id ] -= dtOverRho * gradp;
+		}
 	for( unsigned int i = 0; i < sizev.x; ++i )
-	for( unsigned int j = 1; j < sizev.y - 1; ++j )
-    {
-        const Index2 id( i, j );
-        const float gradp = ( pressure[ id ] - pressure[ Index2( i, j-1 ) ] ) * invDx.y;
-        velocityY[ id ] -= dtOverRho * gradp;
-    }
+		for( unsigned int j = 1; j < sizev.y - 1; ++j ){
+			const Index2 id( i, j );
+			const float gradp = ( pressure[ id ] - pressure[ Index2( i, j-1 ) ] ) * invDx.y;
+			velocityY[ id ] -= dtOverRho * gradp;
+		}
 
-    if( flipEnabled )
-    {
+    if( flipEnabled ){
         // calculate FLIP velocity delta
 
 
