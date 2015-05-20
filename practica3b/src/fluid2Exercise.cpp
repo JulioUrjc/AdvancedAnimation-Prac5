@@ -56,10 +56,34 @@ namespace{
 	//////////////////////////////////////////////
 	// Add any custom classes or functions here //
 	//////////////////////////////////////////////
+
 	inline float random(const float max, const float min){  
 		float randomize = (float)rand() / (float) RAND_MAX;
 		float interval = fabs(max - min);
 		return (randomize*interval) + fmin(min,max);
+	}
+	// Bilinear interpolation
+	float interpolation(Vec2 vel1, Array2<float>& vel2){
+		// Calculate min and max position
+		Vec2 posMin(floorf(vel1.x), floorf(vel1.y));
+		Vec2 posMax(ceilf(vel1.x), ceilf(vel1.y));
+		Vec2 mid(vel1 - posMin);
+
+		Index2 min((int)posMin.x, (int)posMin.y);
+		Index2 max((int)posMax.x, (int)posMax.y);
+		// Calculate index cells
+		Index2 s = vel2.getSize();
+		Index2 id1(clamp(min.x, 0, s.x - 1), clamp(min.y, 0, s.y - 1));
+		Index2 id2(clamp(max.x, 0, s.x - 1), clamp(min.y, 0, s.y - 1));
+		Index2 id3(clamp(min.x, 0, s.x - 1), clamp(max.y, 0, s.y - 1));
+		Index2 id4(clamp(max.x, 0, s.x - 1), clamp(max.y, 0, s.y - 1));
+
+		// Bilinear interpolation
+		// alfa= x-i	beta= y-j
+		// U_alfa_j=  (1-alfa)*u_ij + alfa*u_i + 1j
+		// U_alfa_j+1= (1-alfa)*u_ij + 1 + alfa*u_i + 1j + 1
+		// I= (1-beta)u_alfa_j + beta*u_alfa_j + 1
+		return (vel2[id1] * (1.0f - mid.x) + vel2[id2] * mid.x)* (1.0f - mid.y) + (vel2[id3] * (1.0f - mid.x) + vel2[id4] * mid.x)* mid.y;
 	}
 }
 
@@ -98,8 +122,27 @@ void Fluid2::initParticles( void ){
 void Fluid2::fluidAdvection( const float dt ){
     if(flipEnabled){
         // move particles with RK2 with grid velocities
+		Array2<float> xCopy(velocityX);					 									// Copy X for the interpolation
+		Array2<float> yCopy(velocityY);					 									// Copy Y for the interpolation
 
-        // ensure particle remains inside the domain
+		for (unsigned int i= 0; i< particles.getSize(); ++i){
+			/// foreach particle search the index cell
+			// first stage of Runge-Kutta 2 (do a half Euler step)
+			const Vec2& posParticle = particles.getPosition(i);
+			const Vec2& uParticle = grid.getFaceIndex(posParticle, 0);
+			const Vec2& vParticle = grid.getFaceIndex(posParticle, 1);
+			Vec2 midVel = Vec2 (interpolation(uParticle, xCopy), interpolation(vParticle, yCopy));
+			Vec2 midPos = posParticle + 0.5*dt*midVel;
+			// second stage of Runge-Kutta 2
+			midVel = Vec2(interpolation(grid.getFaceIndex(posParticle, 0), xCopy), interpolation(grid.getFaceIndex(posParticle, 1), yCopy));
+			const Vec2 posFinal = posParticle + dt*midVel;
+			particles.setPosition(i, posFinal);
+		}
+
+		// ensure particle remains inside the domain
+		for (unsigned int i= 0; i< particles.getSize(); ++i){
+			particles.setPosition(i, clamp(particles.getPosition(i), grid.getDomain().minPosition, grid.getDomain().maxPosition));
+		}
 
         // create ink grid from particles
 
