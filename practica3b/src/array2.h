@@ -15,7 +15,7 @@ public:
 	Array2( const int i, const int j )
         : ptr_( NULL )
     {
-        resize( Index2( i, j ) )
+		resize(Index2(i, j));
 	}
 
 	Array2( const Index2& size )

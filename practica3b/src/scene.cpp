@@ -7,8 +7,8 @@
 using namespace std;
 
 bool Scene::pauseFlag		= true;
-unsigned int Scene::nCellsX = 200;
-unsigned int Scene::nCellsY = 200;
+unsigned int Scene::nCellsX = 100;
+unsigned int Scene::nCellsY = 100;
 float Scene::step			= 0.01f;
 float Scene::kDensity       = 1.0f;
 float Scene::kGravity       = -1.0f;
